@@ -1,0 +1,12 @@
+Why are we creating these folders?
+Folder	Purpose
+config	MongoDB connection
+controllers	Handle API requests
+routes	API endpoints
+models	MongoDB schemas
+services	Business logic
+algorithms	Fault localization logic (most important)
+simulator	Generate fake telemetry and faults
+middleware	Error handling, validation
+utils	Helper functions
+seed	Generate synthetic pole and transformer data
