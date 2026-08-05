@@ -1,0 +1,40 @@
+services:
+  # 1. MongoDB Database Service
+  mongodb:
+    image: mongo:latest
+    container_name: electricpulse_mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  # 2. Node.js Express Backend Service
+  backend:
+    build:
+      context: ./Server
+      dockerfile: Dockerfile
+    container_name: electricpulse_backend
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - MONGO_URI=mongodb://mongodb:27017/electricpulse
+    depends_on:
+      - mongodb
+
+  # 3. React Vite Frontend Service
+  frontend:
+    build:
+      context: ./Client
+      dockerfile: Dockerfile
+    container_name: electricpulse_frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo-data:

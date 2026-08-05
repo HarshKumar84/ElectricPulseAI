@@ -5,7 +5,7 @@ export default function TicketDetailModal({ ticket, onClose, onUpdateStatus, onT
   if (!ticket) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
       <div className="glass-panel max-w-3xl w-full rounded-2xl border border-gray-700 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         
         {/* Modal Header */}

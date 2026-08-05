@@ -8,27 +8,44 @@ import GridMap from "./components/GridMap";
 import TicketList from "./components/TicketList";
 import TicketDetailModal from "./components/TicketDetailModal";
 import SimulatorPanel from "./components/SimulatorPanel";
-
-import { DEMO_GRID_DATA, DEMO_TICKETS } from "./utils/demoData";
+import EventTimeline from "./components/EventTimeline";
 
 const API_BASE = "http://localhost:5000/api/v1";
 const SOCKET_URL = "http://localhost:5000";
 
+const EMPTY_GRID_DATA = {
+  summary: {
+    feeders_count: 0,
+    transformers_count: 0,
+    total_poles: 0,
+    energized_poles: 0,
+    dark_poles: 0,
+    active_sensors: 0
+  },
+  feeders: [],
+  transformers: [],
+  poles: []
+};
+
 export default function App() {
-  const [gridData, setGridData] = useState(DEMO_GRID_DATA);
-  const [tickets, setTickets] = useState(DEMO_TICKETS);
+  const [gridData, setGridData] = useState(EMPTY_GRID_DATA);
+  const [tickets, setTickets] = useState([]);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [socketConnected, setSocketConnected] = useState(false);
+  const [telemetryEvents, setTelemetryEvents] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const fetchGridData = async () => {
     try {
       const res = await axios.get(`${API_BASE}/grid/overview`, { timeout: 3000 });
-      if (res.data.success && res.data.poles?.length > 0) {
+      if (res.data.success && res.data.summary) {
         setGridData(res.data);
+      } else {
+        setGridData(EMPTY_GRID_DATA);
       }
     } catch (err) {
-      console.log("Using Demo Grid Data (Backend offline or connecting)");
+      console.log("Database/Backend API disconnected or returning empty grid.");
+      setGridData(EMPTY_GRID_DATA);
     }
   };
 
@@ -37,9 +54,12 @@ export default function App() {
       const res = await axios.get(`${API_BASE}/tickets`, { timeout: 3000 });
       if (res.data.success && res.data.tickets) {
         setTickets(res.data.tickets);
+      } else {
+        setTickets([]);
       }
     } catch (err) {
-      console.log("Using Demo Tickets (Backend offline or connecting)");
+      console.log("Database/Backend API disconnected or returning empty tickets.");
+      setTickets([]);
     }
   };
 
@@ -73,7 +93,20 @@ export default function App() {
       fetchGridData();
     });
 
-    socket.on("ticket:created", (newTicket) => {
+    socket.on("telemetry:received", (data) => {
+      setTelemetryEvents(prev => [
+        {
+          id: Date.now() + Math.random(),
+          pole_id: data.pole_id,
+          event: data.energized ? "power_restored" : "power_lost",
+          energized: data.energized,
+          time: new Date().toLocaleTimeString()
+        },
+        ...prev.slice(0, 19)
+      ]);
+    });
+
+    socket.on("ticket:created", () => {
       fetchTickets();
       fetchGridData();
     });
@@ -101,8 +134,7 @@ export default function App() {
       await axios.patch(`${API_BASE}/tickets/${ticketId}/status`, { status });
       fetchTickets();
     } catch (err) {
-      // Local demo fallback
-      setTickets(prev => prev.map(t => t.ticket_id === ticketId ? { ...t, status } : t));
+      console.error("Error updating ticket status:", err);
     }
   };
 
@@ -115,13 +147,7 @@ export default function App() {
       fetchTickets();
       fetchGridData();
     } catch (err) {
-      // Local demo repair
-      setTickets(prev => prev.map(t => t.ticket_id === ticketId ? { ...t, status: "RESOLVED" } : t));
-      setGridData(prev => ({
-        ...prev,
-        poles: prev.poles.map(p => ({ ...p, is_energized: true })),
-        summary: { ...prev.summary, energized_poles: prev.summary.total_poles, dark_poles: 0 }
-      }));
+      console.error("Error executing repair trigger:", err);
     }
     setSelectedTicket(null);
   };
@@ -132,15 +158,7 @@ export default function App() {
       fetchTickets();
       fetchGridData();
     } catch (err) {
-      // Local demo fault simulation
-      if (payload.type === "SPAN_FAULT") {
-        const targetId = payload.to_pole_id || "P-20103";
-        setGridData(prev => ({
-          ...prev,
-          poles: prev.poles.map(p => p.pole_id >= targetId && p.transformer_id === payload.transformer_id ? { ...p, is_energized: false } : p),
-          summary: { ...prev.summary, dark_poles: 8, energized_poles: 22 }
-        }));
-      }
+      console.error("Error executing simulation trigger:", err);
     }
   };
 
@@ -159,7 +177,7 @@ export default function App() {
       <main className="flex-1 max-w-[1440px] w-full mx-auto p-4 md:p-6 space-y-5">
         
         {/* Live Grid Metrics Bar */}
-        <StatsOverview summary={gridData.summary} tickets={tickets} />
+        <StatsOverview summary={gridData.summary || EMPTY_GRID_DATA.summary} tickets={tickets} />
 
         {/* Core Layout: Grid Map + Control Feed */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
@@ -185,13 +203,20 @@ export default function App() {
 
         </div>
 
-        {/* Embedded Simulator Panel */}
-        <SimulatorPanel
-          transformers={gridData.transformers || []}
-          poles={gridData.poles || []}
-          tickets={tickets}
-          onSimulateFault={handleSimulateFault}
-        />
+        {/* Event Timeline Stream & Simulator Panel Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          <div className="lg:col-span-6">
+            <EventTimeline tickets={tickets} />
+          </div>
+          <div className="lg:col-span-6">
+            <SimulatorPanel
+              transformers={gridData.transformers || []}
+              poles={gridData.poles || []}
+              tickets={tickets}
+              onSimulateFault={handleSimulateFault}
+            />
+          </div>
+        </div>
 
       </main>
 

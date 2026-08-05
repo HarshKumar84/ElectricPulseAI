@@ -29,9 +29,8 @@ export default function GridMap({ transformers, poles, tickets, onSelectTicket }
       const parent = poleMap.get(pole.parent_pole_id);
       if (parent) {
         const isBroken = parent.is_energized && !pole.is_energized && pole.sensor_status !== "PLANNED_OUTAGE";
-        const isMaintenance = pole.sensor_status === "PLANNED_OUTAGE";
+        const isMaintenance = pole.sensor_status === "PLANNED_OUTAGE" || parent.sensor_status === "PLANNED_OUTAGE";
         const isTopologyInferred = pole.is_topology_inferred || parent.is_topology_inferred;
-        const bothEnergized = parent.is_energized && pole.is_energized;
 
         lineSegments.push({
           id: `${parent.pole_id}-${pole.pole_id}`,
@@ -42,7 +41,6 @@ export default function GridMap({ transformers, poles, tickets, onSelectTicket }
           isBroken,
           isMaintenance,
           isTopologyInferred,
-          bothEnergized,
           from: parent,
           to: pole
         });
@@ -57,27 +55,27 @@ export default function GridMap({ transformers, poles, tickets, onSelectTicket }
     <div className="glass-panel p-2 rounded-xl relative overflow-hidden h-[560px] border border-gray-800 shadow-2xl">
       
       {/* Map Control Legend Overlay */}
-      <div className="absolute top-4 right-4 z-[400] bg-gray-900/90 backdrop-blur-md p-3 rounded-xl border border-gray-800 text-[11px] font-mono space-y-1.5 shadow-xl">
+      <div className="absolute top-4 right-4 z-[10] bg-gray-900/90 backdrop-blur-md p-3 rounded-xl border border-gray-800 text-[11px] font-mono space-y-1.5 shadow-xl">
         <p className="font-bold text-gray-200 text-xs font-heading mb-1 border-b border-gray-800 pb-1">⚡ Grid Topology Legend</p>
         <div className="flex items-center space-x-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block shadow-[0_0_6px_#10b981]"></span>
-          <span className="text-gray-300">Live Pole / Energized Line</span>
+          <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block shadow-[0_0_8px_#10b981]"></span>
+          <span className="text-gray-200 font-semibold">Live Pole / Energized Line</span>
         </div>
         <div className="flex items-center space-x-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block shadow-[0_0_6px_#ef4444]"></span>
-          <span className="text-gray-300">Dark Pole / Span Break</span>
+          <span className="w-3 h-3 rounded-full bg-red-500 inline-block shadow-[0_0_8px_#ef4444]"></span>
+          <span className="text-gray-200 font-semibold">Dark Pole / Span Break</span>
         </div>
         <div className="flex items-center space-x-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-purple-400 inline-block"></span>
-          <span className="text-gray-300">Planned Government Outage</span>
+          <span className="w-3 h-3 rounded-full bg-purple-500 inline-block shadow-[0_0_8px_#a855f7]"></span>
+          <span className="text-gray-200 font-semibold">Planned Government Outage</span>
         </div>
         <div className="flex items-center space-x-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span>
-          <span className="text-gray-300">Silent Sensor (Heartbeat Timeout)</span>
+          <span className="w-3 h-3 rounded-full bg-amber-400 inline-block shadow-[0_0_8px_#f59e0b]"></span>
+          <span className="text-gray-200 font-semibold">Silent Sensor (Heartbeat Timeout)</span>
         </div>
         <div className="flex items-center space-x-2 pt-1 border-t border-gray-800 text-[10px]">
           <span className="w-4 border-b-2 border-dashed border-cyan-400 inline-block"></span>
-          <span className="text-cyan-300">Inferred Topology (60% Missing Data)</span>
+          <span className="text-cyan-300">Inferred Topology (Spatial Links)</span>
         </div>
       </div>
 
@@ -94,10 +92,10 @@ export default function GridMap({ transformers, poles, tickets, onSelectTicket }
 
         {/* 1. Draw Power Lines */}
         {lineSegments.map(seg => {
-          let lineColor = "#06b6d4"; // Default cyan
-          if (seg.isBroken) lineColor = "#ef4444";
-          else if (seg.isMaintenance) lineColor = "#8b5cf6";
-          else if (seg.isTopologyInferred) lineColor = "#38bdf8";
+          let lineColor = "#10b981"; // Live Green Line
+          if (seg.isBroken) lineColor = "#ef4444"; // Dark Red Line
+          else if (seg.isMaintenance) lineColor = "#a855f7"; // Maintenance Purple Line
+          else if (seg.isTopologyInferred) lineColor = "#38bdf8"; // Inferred Cyan Line
 
           return (
             <Polyline
@@ -107,7 +105,7 @@ export default function GridMap({ transformers, poles, tickets, onSelectTicket }
                 color: lineColor,
                 weight: seg.isBroken ? 4 : 2.5,
                 dashArray: seg.isBroken ? "8, 8" : seg.isTopologyInferred ? "6, 6" : null,
-                opacity: 0.85
+                opacity: 0.9
               }}
             >
               <Popup>
@@ -145,33 +143,46 @@ export default function GridMap({ transformers, poles, tickets, onSelectTicket }
           </Marker>
         ))}
 
-        {/* 3. Draw Electric Poles */}
+        {/* 3. Draw Electric Poles with Precise Color Legend Mapping */}
         {poles.map(pole => {
-          let fillColor = "#10b981"; // Live Green
-          if (!pole.is_energized) fillColor = "#ef4444"; // Dark Red
-          if (pole.sensor_status === "OFFLINE") fillColor = "#f59e0b"; // Silent Sensor Amber
-          if (pole.sensor_status === "PLANNED_OUTAGE") fillColor = "#8b5cf6"; // Planned Maintenance Purple
+          // 🟢 Live Pole / Energized Line (Default Green)
+          let fillColor = "#10b981";
+
+          // 🔴 Dark Pole / Span Break (Red)
+          if (!pole.is_energized && pole.sensor_status !== "PLANNED_OUTAGE" && pole.sensor_status !== "OFFLINE" && pole.sensor_status !== "DEAD_SENSOR" && pole.sensor_status !== "SILENT_SENSOR") {
+            fillColor = "#ef4444";
+          }
+
+          // 🟡 Silent Sensor / Heartbeat Timeout / Dead Sensor (Amber/Yellow)
+          if (pole.sensor_status === "OFFLINE" || pole.sensor_status === "SILENT_SENSOR" || pole.sensor_status === "DEAD_SENSOR") {
+            fillColor = "#f59e0b";
+          }
+
+          // 🟣 Planned Government Outage (Purple)
+          if (pole.sensor_status === "PLANNED_OUTAGE") {
+            fillColor = "#a855f7";
+          }
 
           return (
             <CircleMarker
               key={pole.pole_id}
               center={[pole.location.lat, pole.location.lng]}
-              radius={pole.is_energized ? 6 : 8}
+              radius={pole.is_energized ? 6.5 : 8.5}
               pathOptions={{
                 color: pole.is_topology_inferred ? "#38bdf8" : "#ffffff",
                 weight: pole.is_topology_inferred ? 2 : 1.5,
                 fillColor: fillColor,
-                fillOpacity: 0.95
+                fillOpacity: 1.0
               }}
             >
               <Popup>
                 <div className="p-1 font-sans">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between space-x-2">
                     <span className="font-bold text-sm font-mono text-cyan-400">{pole.pole_id}</span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
                       pole.sensor_status === 'PLANNED_OUTAGE' 
                         ? 'bg-purple-500/30 text-purple-300' 
-                        : pole.sensor_status === 'OFFLINE'
+                        : pole.sensor_status === 'OFFLINE' || pole.sensor_status === 'SILENT_SENSOR' || pole.sensor_status === 'DEAD_SENSOR'
                         ? 'bg-amber-500/30 text-amber-300'
                         : pole.is_energized 
                         ? 'bg-emerald-500/20 text-emerald-400' 
@@ -179,8 +190,10 @@ export default function GridMap({ transformers, poles, tickets, onSelectTicket }
                     }`}>
                       {pole.sensor_status === 'PLANNED_OUTAGE' 
                         ? 'PLANNED OUTAGE' 
-                        : pole.sensor_status === 'OFFLINE'
+                        : pole.sensor_status === 'OFFLINE' || pole.sensor_status === 'SILENT_SENSOR'
                         ? 'SILENT SENSOR'
+                        : pole.sensor_status === 'DEAD_SENSOR'
+                        ? 'DEAD SENSOR'
                         : pole.is_energized ? 'LIVE' : 'DARK'}
                     </span>
                   </div>
@@ -188,7 +201,7 @@ export default function GridMap({ transformers, poles, tickets, onSelectTicket }
                     <p>DT: <span className="font-mono text-gray-200">{pole.transformer_id}</span></p>
                     <p>Parent: <span className="font-mono text-gray-200">{pole.parent_pole_id || "Transformer Root"}</span></p>
                     {pole.is_topology_inferred && (
-                      <p className="text-[10px] text-amber-400 font-mono">⚡ Spatial Topology Inferred</p>
+                      <p className="text-[10px] text-cyan-400 font-mono">⚡ Spatial Topology Inferred</p>
                     )}
                     <p>Houses Connected: <span className="font-semibold text-white">{pole.house_count}</span></p>
                     <p>PIN: <span className="font-mono text-gray-400">{pole.pincode}</span></p>
@@ -220,7 +233,7 @@ export default function GridMap({ transformers, poles, tickets, onSelectTicket }
                 <p className="text-[11px] text-gray-400">PIN: {ticket.pincode}</p>
                 <button
                   onClick={() => onSelectTicket(ticket)}
-                  className="mt-2 w-full text-xs py-1 bg-blue-600 hover:bg-blue-500 text-white rounded font-medium transition"
+                  className="mt-2 w-full text-xs py-1 bg-blue-600 hover:bg-blue-500 text-white rounded font-medium transition cursor-pointer"
                 >
                   Inspect Incident
                 </button>

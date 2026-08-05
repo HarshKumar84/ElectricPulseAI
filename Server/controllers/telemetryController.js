@@ -36,7 +36,7 @@ exports.receiveTelemetry = async (req, res) => {
     const transformer = await Transformer.findOne({ transformer_id: pole.transformer_id });
     const polesUnderDT = await Pole.find({ transformer_id: pole.transformer_id });
 
-    const fault = localizeFaultsForTransformer(transformer, polesUnderDT);
+    const fault = await localizeFaultsForTransformer(transformer, polesUnderDT);
     let ticket = null;
     if (fault) {
       const io = getIO();
