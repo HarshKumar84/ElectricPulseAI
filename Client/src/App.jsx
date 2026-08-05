@@ -10,8 +10,8 @@ import TicketDetailModal from "./components/TicketDetailModal";
 import SimulatorPanel from "./components/SimulatorPanel";
 import EventTimeline from "./components/EventTimeline";
 
-const API_BASE = "http://localhost:5000/api/v1";
-const SOCKET_URL = "http://localhost:5000";
+const API_BASE = import.meta.env.VITE_API_BASE || "https://electricpulseai.onrender.com/api/v1";
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "https://electricpulseai.onrender.com";
 
 const EMPTY_GRID_DATA = {
   summary: {

@@ -249,6 +249,33 @@ async function injectFeederFault(feederId) {
 
 async function repairFault(ticketId) {
   const io = getIO();
+
+  if (!ticketId) {
+    // Global grid repair: restore all poles and transformers to live green state
+    await Pole.updateMany(
+      {},
+      { is_energized: true, sensor_status: "ACTIVE", last_heartbeat: new Date() }
+    );
+    await Transformer.updateMany(
+      {},
+      { is_energized: true, status: "HEALTHY" }
+    );
+    await Feeder.updateMany(
+      {},
+      { status: "ACTIVE" }
+    );
+    await Ticket.updateMany(
+      { status: { $in: ["DETECTED", "ACKNOWLEDGED", "CREW_ASSIGNED", "RESOLVED", "VERIFIED"] } },
+      { status: "CLOSED", closed_at: new Date() }
+    );
+
+    if (io) {
+      io.emit("grid:updated", {});
+      io.emit("ticket:closed", {});
+    }
+    return { success: true, message: "All grid poles restored to LIVE state" };
+  }
+
   const ticket = await Ticket.findOne({ ticket_id: ticketId });
   if (!ticket) throw new Error(`Ticket ${ticketId} not found`);
 
